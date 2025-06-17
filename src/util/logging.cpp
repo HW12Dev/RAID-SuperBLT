@@ -151,7 +151,7 @@ namespace raidhook
 			{
 				std::lock_guard<std::mutex> lock(GetLoggerMutex());
 
-				std::cout << msg << mEndl;
+				//std::cout << msg << mEndl;
 
 #ifdef ENABLE_DEBUG
 				DebugConnection::Log(msg);

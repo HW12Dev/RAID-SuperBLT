@@ -26,6 +26,7 @@ idfile last_parsed;
 
 char* tweaker::tweak_raid_xml(char* text, int text_length)
 {
+	return text; // sorry
 	if (!tweaker_enabled)
 	{
 		return text;

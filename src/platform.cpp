@@ -6,6 +6,7 @@
 #include <util/util.h>
 
 #include <fstream>
+#include <sstream>
 #include <string>
 
 using namespace std;
@@ -44,9 +45,20 @@ void blt::platform::InitPlatform()
 		console = new CConsole();
 #endif
 
-	if (!SignatureSearch::Search())
+	std::vector<std::string> error_sources;
+	if (!SignatureSearch::Search(error_sources))
 	{
-		MessageBox(nullptr, "This SuperBLT version is not compatible with your current game version. The game will be started without SuperBLT.", "SuperBLT version incompatible", MB_OK);
+
+		std::stringstream err_text;
+		err_text << "This SuperBLT version is not compatible with your current game version. The game will be started "
+		            "without SuperBLT.";
+
+		for (auto& error : error_sources)
+		{
+			err_text << "\n" << error;
+		}
+
+		MessageBox(nullptr, err_text.str().c_str(), "SuperBLT version incompatible", MB_OK);
 
 		// TODO: check for update, self update (if available) (1. rename self, 2. extract new dll, 3. restart game, 4. cleanup renamed dll)
 

@@ -11,7 +11,7 @@
 #include "subhook.h"
 
 #define SIG_INCLUDE_MAIN
-#define INCLUDE_TRY_OPEN_FUNCTIONS
+//#define INCLUDE_TRY_OPEN_FUNCTIONS
 #include "sigdef.h"
 #undef SIG_INCLUDE_MAIN
 
@@ -334,7 +334,7 @@ SignatureSearch::SignatureSearch(const char* funcname, void* adress, const char*
 	allSignatures->push_back(ins);
 }
 
-bool SignatureSearch::Search()
+bool SignatureSearch::Search(std::vector<std::string>& error_sources)
 {
 	// Find the name of the current EXE
 	TCHAR processPath[MAX_PATH + 1];
@@ -375,7 +375,10 @@ bool SignatureSearch::Search()
 		{
 			hintCorrect = true; // If the signature doesn't exist at all, it's not the cache's fault
 			if (!hasError)
+			{
 				hasError = true;
+				error_sources.push_back(it->funcname);
+			}
 		}
 		else if (hint == -1 && addr != NULL)
 		{
@@ -399,7 +402,11 @@ bool SignatureSearch::Search()
 	}
 
 	int asset_cache_misses = 0;
-	if (!FindAssetLoadSignatures(filename, cache, &asset_cache_misses) && !hasError) hasError = true;
+	/*if (!FindAssetLoadSignatures(filename, cache, &asset_cache_misses))
+	{
+		hasError = true;
+		error_sources.push_back("asset load signatures");
+	}*/
 	cacheMisses += asset_cache_misses;
 
 	unsigned long ms_end = GetTickCount64();

@@ -184,11 +184,6 @@ namespace raidhook
 	} \
 	auto& logger = raidhook::Logging::Logger::Instance(); \
 	if(level >= logger.getLoggingLevel()) { \
-		if (color > 0x0000) \
-		{ \
-			HANDLE hStdout = GetStdHandle(STD_OUTPUT_HANDLE); \
-			SetConsoleTextAttribute(hStdout, color); \
-		} \
 		raidhook::Logging::LogWriter writer(file, line, level); \
 		writer << msg; \
 		writer.write(logger); \

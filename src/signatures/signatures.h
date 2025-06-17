@@ -17,7 +17,7 @@ class SignatureSearch
 {
 public:
 	SignatureSearch(const char* funcname, void* address, const char* signature, const char* mask, int offset);
-	static bool Search();
+	static bool Search(std::vector<std::string>& error_sources);
 	static void* GetFunctionByName(const char* name);
 };
 

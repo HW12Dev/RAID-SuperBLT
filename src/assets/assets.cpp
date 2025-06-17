@@ -3,7 +3,7 @@
 //
 
 #include <vector>
-#define INCLUDE_TRY_OPEN_FUNCTIONS
+//#define INCLUDE_TRY_OPEN_FUNCTIONS
 
 #include "assets.h"
 #include "platform.h"
@@ -22,10 +22,10 @@ using raidhook::tweaker::dbhook::hook_asset_load;
 #include "assets/assets_game.cpp"
 
 // Three hooks for the other try_open functions: property_match_resolver, language_resolver and english_resolver
-DECLARE_PASSTHROUGH_ARRAY(0)
-DECLARE_PASSTHROUGH_ARRAY(1)
-DECLARE_PASSTHROUGH_ARRAY(2)
-DECLARE_PASSTHROUGH(try_open_property_match_resolver)
+//DECLARE_PASSTHROUGH_ARRAY(0)
+//DECLARE_PASSTHROUGH_ARRAY(1)
+//DECLARE_PASSTHROUGH_ARRAY(2)
+//DECLARE_PASSTHROUGH(try_open_property_match_resolver)
 
 void blt::win32::InitAssets()
 {
@@ -34,14 +34,14 @@ void blt::win32::InitAssets()
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmicrosoft-cast"
 
-	if (!try_open_functions.empty())
+	/*if (!try_open_functions.empty())
 		SETUP_PASSTHROUGH_ARRAY(0);
 	if (try_open_functions.size() > 1)
 		SETUP_PASSTHROUGH_ARRAY(1);
 	if (try_open_functions.size() > 2)
 		SETUP_PASSTHROUGH_ARRAY(2);
 
-	SETUP_PASSTHROUGH(try_open_property_match_resolver);
+	SETUP_PASSTHROUGH(try_open_property_match_resolver);*/
 
 #pragma clang diagnostic pop
 	setup_extra_asset_hooks();
