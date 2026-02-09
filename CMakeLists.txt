@@ -119,11 +119,6 @@ set(ZLIB_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(lib/sys/zlib EXCLUDE_FROM_ALL)
 
-target_include_directories(zlibstatic PUBLIC
-    $<BUILD_INTERFACE:${zlib_SOURCE_DIR}>
-    $<BUILD_INTERFACE:${zlib_BINARY_DIR}>
-)
-
 # Link to the expected CURL-compatible zlib target
 set(ZLIB_LIBRARY zlibstatic)
 set(ZLIB_INCLUDE_DIR ${zlib_SOURCE_DIR})
