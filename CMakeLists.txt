@@ -111,27 +111,32 @@ target_link_libraries(SuperBLT mxml)
 target_link_libraries(SuperBLT wren)
 target_link_libraries(SuperBLT subhook)
 
+# Build zlib-ng and curl as static
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build as static, set by SBLT's buildscript")
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+
 #### zlib-ng ####
 
-set(ZLIB_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
 set(ZLIB_COMPAT ON CACHE BOOL "" FORCE)  # Ensures zlib-ng mimics zlib 1.2.x API
 set(ZLIB_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(lib/sys/zlib EXCLUDE_FROM_ALL)
 
+target_include_directories(zlib-ng PUBLIC
+    $<BUILD_INTERFACE:${zlib_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${zlib_BINARY_DIR}>
+)
+
 # Link to the expected CURL-compatible zlib target
-set(ZLIB_LIBRARY zlibstatic)
+set(ZLIB_LIBRARY zlib-ng)
 set(ZLIB_INCLUDE_DIR ${zlib_SOURCE_DIR})
-target_link_libraries(SuperBLT zlibstatic)
+target_link_libraries(SuperBLT zlib-ng)
 
 # Sanity check
 get_target_property(_zlib_inc zlib INTERFACE_INCLUDE_DIRECTORIES)
 message(STATUS "zlib-ng include dirs: ${_zlib_inc}")
 
 #### CURL ####
-
-# Required to build curl as static
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build as static, set by SBLT's buildscript")
 
 # Use Windows SSPI for HTTPS
 set(CURL_USE_SCHANNEL ON)
@@ -184,6 +189,6 @@ target_compile_options(WSOCK32 PRIVATE -DBLT_USE_WSOCK)
 ###############################################################################
 add_executable(SBLT_DLL_UPDATER updater/updater.cpp updater/compression.cpp updater/Resource.rc)
 target_link_libraries(SBLT_DLL_UPDATER ws2_32.lib)
-target_link_libraries(SBLT_DLL_UPDATER zlibstatic)
+target_link_libraries(SBLT_DLL_UPDATER zlib-ng)
 target_link_libraries(SBLT_DLL_UPDATER libcurl_static)
 target_include_directories(SBLT_DLL_UPDATER PRIVATE updater)
