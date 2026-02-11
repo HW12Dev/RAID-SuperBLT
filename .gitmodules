@@ -16,3 +16,9 @@
 [submodule "lib/subhook"]
 	path = lib/subhook
 	url = https://github.com/BangL/subhook.git
+[submodule "lib/sys/libpsl"]
+	path = lib/sys/libpsl
+	url = https://github.com/rockdaboot/libpsl.git
+[submodule "lib/sys/psl-list"]
+	path = lib/sys/psl-list
+	url = https://github.com/publicsuffix/list.git
