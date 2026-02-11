@@ -58,3 +58,4 @@ jobs:
         path: |
           build/Release/IPHLPAPI.dll
           build/Release/WSOCK32.dll
+          build/Release/SBLT_DLL_UPDATER.exe
