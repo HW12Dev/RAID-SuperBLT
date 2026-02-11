@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(SuperBLT)
+project(SuperBLT CXX)
 
 ###############################################################################
 ## misc. definitions ##########################################################
@@ -8,8 +8,17 @@ project(SuperBLT)
 
 enable_language(ASM_MASM)
 
-# Use CXX 20
+# Use C 11, no gnu ext
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_EXTENSIONS OFF)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+# Use C++ 20, no gnu ext
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# find python3
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 ###############################################################################
 ## file globbing ##############################################################
@@ -55,7 +64,6 @@ target_include_directories(subhook PUBLIC lib/subhook)
 ## Wren source generation #####################################################
 ###############################################################################
 
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(wren_src_files
 	wren/native.wren
 	wren/DB_001.wren
@@ -94,8 +102,7 @@ foreach(flag_var CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE C
 endforeach(flag_var)
 
 # Link against libraries
-target_link_libraries(SuperBLT ws2_32.lib)
-target_link_libraries(SuperBLT version.lib)
+target_link_libraries(SuperBLT crypt32.lib ws2_32.lib version.lib)
 
 # Allow both SuperBLT and the loaders access to the headers
 target_include_directories(SuperBLT PUBLIC src)
@@ -111,60 +118,205 @@ target_link_libraries(SuperBLT mxml)
 target_link_libraries(SuperBLT wren)
 target_link_libraries(SuperBLT subhook)
 
+# Build libs as static
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build libs as static, set by SBLT's buildscript")
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+
+
+
+#### libpsl ####
+
+set(LIBPSL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib/sys/libpsl")
+
+# Read version from version.txt
+file(READ "${LIBPSL_DIR}/version.txt" LIBPSL_VERSION)
+string(STRIP "${LIBPSL_VERSION}" LIBPSL_VERSION)
+
+# Split version into major, minor, patch
+string(REPLACE "." ";" LIBPSL_VERSION_LIST "${LIBPSL_VERSION}")
+list(GET LIBPSL_VERSION_LIST 0 LIBPSL_VERSION_MAJOR)
+list(GET LIBPSL_VERSION_LIST 1 LIBPSL_VERSION_MINOR)
+list(GET LIBPSL_VERSION_LIST 2 LIBPSL_VERSION_PATCH)
+
+message(STATUS "Using libpsl version: ${LIBPSL_VERSION}")
+
+# Compute numerical value
+math(EXPR LIBPSL_VERSION_VALUE "(${LIBPSL_VERSION_MAJOR} << 16) + (${LIBPSL_VERSION_MINOR} << 8) + ${LIBPSL_VERSION_PATCH}")
+
+# Convert to padded hex string without 0x
+string(HEX ${LIBPSL_VERSION_VALUE} LIBPSL_HEX_VALUE)
+string(LENGTH "${LIBPSL_HEX_VALUE}" HEX_LEN)
+math(EXPR PAD_LEN "6 - ${HEX_LEN}")
+if(PAD_LEN GREATER 0)
+    string(REPEAT "0" ${PAD_LEN} PADDING)
+    set(LIBPSL_HEX_VALUE "${PADDING}${LIBPSL_HEX_VALUE}")
+endif()
+
+# Set hex with 0x for substitution
+set(PSL_VERSION_NUMBER "0x${LIBPSL_HEX_VALUE}")
+
+# Set other variables for .in files
+set(PSL_VERSION "${LIBPSL_VERSION}")
+set(PSL_VERSION_MAJOR "${LIBPSL_VERSION_MAJOR}")
+set(PSL_VERSION_MINOR "${LIBPSL_VERSION_MINOR}")
+set(PSL_VERSION_PATCH "${LIBPSL_VERSION_PATCH}")
+
+set(PACKAGE_NAME "libpsl")
+set(PACKAGE_VERSION "${LIBPSL_VERSION}")
+set(PACKAGE_STRING "${PACKAGE_NAME} ${PACKAGE_VERSION}")
+set(PACKAGE_TARNAME "libpsl")
+set(PACKAGE_URL "https://github.com/rockdaboot/libpsl")
+set(PACKAGE_BUGREPORT "tim.ruehsen@gmx.de")
+
+# Generated dir
+set(PSL_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/psl")
+file(MAKE_DIRECTORY "${PSL_BINARY_DIR}")
+
+# Generate libpsl.h
+configure_file(
+    "${LIBPSL_DIR}/include/libpsl.h.in"
+    "${PSL_BINARY_DIR}/libpsl.h"
+    @ONLY
+)
+
+# Generate config.h from MSVC template
+configure_file(
+    "${LIBPSL_DIR}/msvc/config.h.win32.in"
+    "${PSL_BINARY_DIR}/config.h"
+    @ONLY
+)
+
+# Generate suffixes_dafsa.h using the fresh data file
+set(PSL_DATA_FILE      "${CMAKE_CURRENT_SOURCE_DIR}/lib/sys/psl-list/public_suffix_list.dat")
+set(SUFFIXES_DAFSA_H   "${PSL_BINARY_DIR}/suffixes_dafsa.h")
+add_custom_command(
+    OUTPUT "${SUFFIXES_DAFSA_H}"
+    COMMAND ${Python3_EXECUTABLE}
+            "${LIBPSL_DIR}/src/psl-make-dafsa"
+            --output-format=cxx+
+            "${PSL_DATA_FILE}"
+            "${SUFFIXES_DAFSA_H}"
+    MAIN_DEPENDENCY "${LIBPSL_DIR}/src/psl-make-dafsa"
+    DEPENDS
+        "${PSL_DATA_FILE}"
+    WORKING_DIRECTORY "${LIBPSL_DIR}"
+    COMMENT "Generating suffixes_dafsa.h from latest Public Suffix List data"
+    VERBATIM
+)
+add_custom_target(generate_psl_files DEPENDS
+    "${PSL_BINARY_DIR}/libpsl.h"
+    "${PSL_BINARY_DIR}/config.h"
+    "${SUFFIXES_DAFSA_H}"
+)
+
+add_library(psl STATIC
+    "${LIBPSL_DIR}/src/lookup_string_in_fixed_set.c"
+    "${LIBPSL_DIR}/src/psl.c"
+)
+target_compile_definitions(psl PRIVATE
+	HAVE_CONFIG_H=1
+
+	# TODO: build libpsl (and curl) with libidn2
+	# WITH_LIBIDN2=1
+	# ENABLE_RUNTIME=libidn2
+)
+target_compile_definitions(psl PUBLIC PSL_STATIC)
+target_compile_options(psl PRIVATE -D_CRT_SECURE_NO_WARNINGS)
+target_include_directories(psl PUBLIC "${PSL_BINARY_DIR}")
+add_dependencies(psl generate_psl_files)
+
+set(LIBPSL_LIBRARY psl CACHE INTERNAL "")
+set(LIBPSL_INCLUDE_DIR "${PSL_BINARY_DIR}" CACHE INTERNAL "")
+target_link_libraries(SuperBLT psl)
+
+message(STATUS "libpsl generated files in: ${PSL_BINARY_DIR}")
+
+
+
 #### zlib-ng ####
 
-set(ZLIB_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
 set(ZLIB_COMPAT ON CACHE BOOL "" FORCE)  # Ensures zlib-ng mimics zlib 1.2.x API
 set(ZLIB_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(lib/sys/zlib EXCLUDE_FROM_ALL)
 
-target_include_directories(zlibstatic PUBLIC
-    $<BUILD_INTERFACE:${zlib_SOURCE_DIR}>
-    $<BUILD_INTERFACE:${zlib_BINARY_DIR}>
-)
-
 # Link to the expected CURL-compatible zlib target
-set(ZLIB_LIBRARY zlibstatic)
-set(ZLIB_INCLUDE_DIR ${zlib_SOURCE_DIR})
-target_link_libraries(SuperBLT zlibstatic)
+set(ZLIB_LIBRARY zlib-ng CACHE INTERNAL "")
+set(ZLIB_INCLUDE_DIR ${zlib_SOURCE_DIR} CACHE INTERNAL "")
+target_link_libraries(SuperBLT zlib-ng)
 
-# Sanity check
-get_target_property(_zlib_inc zlib INTERFACE_INCLUDE_DIRECTORIES)
-message(STATUS "zlib-ng include dirs: ${_zlib_inc}")
+
 
 #### CURL ####
 
-# Required to build curl as static
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build as static, set by SBLT's buildscript")
-
 # Use Windows SSPI for HTTPS
-set(CURL_USE_SCHANNEL ON)
+set(CURL_USE_SCHANNEL ON CACHE BOOL "" FORCE)
 
 # Turn off all the crap we don't want
-set(CURL_DISABLE_INSTALL ON)
-set(HTTP_ONLY ON) # disable all protocols, but http(s) and ws(s)
-set(ENABLE_UNIX_SOCKETS OFF) # disable unix-socket support [ http(s):// ]
-set(CURL_DISABLE_NEGOTIATE_AUTH ON) # included in SSPI
-set(CURL_DISABLE_KERBEROS_AUTH ON) # included in SSPI
-set(CURL_DISABLE_NTLM ON) # included in SSPI
-set(CURL_DISABLE_WEBSOCKETS ON) # disable websocket support [ ws(s):// ]
+set(CURL_DISABLE_INSTALL ON CACHE BOOL "" FORCE)
+set(HTTP_ONLY ON CACHE BOOL "" FORCE) # disable all protocols, but http(s) and ws(s)
+set(ENABLE_UNIX_SOCKETS OFF CACHE BOOL "" FORCE) # disable unix-socket support [ http(s):// ]
+set(CURL_DISABLE_NEGOTIATE_AUTH ON CACHE BOOL "" FORCE) # included in SSPI
+set(CURL_DISABLE_KERBEROS_AUTH ON CACHE BOOL "" FORCE) # included in SSPI
+set(CURL_DISABLE_NTLM ON CACHE BOOL "" FORCE) # included in SSPI
+set(CURL_DISABLE_WEBSOCKETS ON CACHE BOOL "" FORCE) # disable websocket support [ ws(s):// ]
 
 # link curl against our included static zlib, to enable it's libz features
 set(CURL_ZLIB OFF CACHE BOOL "" FORCE)        # prevent it from trying to find system zlib
 set(CMAKE_DISABLE_FIND_PACKAGE_ZLIB ON CACHE BOOL "" FORCE)  # disable external find
-set(ZLIB_LIBRARY zlib CACHE STRING "" FORCE)
+set(ZLIB_LIBRARY zlib-ng CACHE STRING "" FORCE)
 set(ZLIB_INCLUDE_DIR ${zlib_SOURCE_DIR} CACHE PATH "" FORCE)
 
-set(CURL_USE_LIBPSL OFF) # TODO: include https://github.com/rockdaboot/libpsl
-
 add_subdirectory(lib/sys/curl EXCLUDE_FROM_ALL)
+
+# ──────────────────────────────────────────────────────────────
+# Workaround: MSVC preprocessor fails to parse chained #if expression
+# in curl/lib/psl.c when building with libpsl, due to a version check
+# We know our libpsl is 0.21.5, so lets just remove the comparison inplace,
+# and later clean it, so we dont leave a dirty submodule. (see restore_and_clean_curl)
+# ──────────────────────────────────────────────────────────────
+set(ORIGINAL_PSL_C "${CMAKE_CURRENT_SOURCE_DIR}/lib/sys/curl/lib/psl.c")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/patch_psl.cmake"
+"file(READ \"${ORIGINAL_PSL_C}\" PSL_C_CONTENT)
+string(REPLACE
+    \"#if defined(PSL_VERSION_NUMBER) && PSL_VERSION_NUMBER >= 0x001000\"
+    \"#if defined(PSL_VERSION_NUMBER)\"
+    PSL_C_CONTENT \"\${PSL_C_CONTENT}\"
+)
+file(WRITE \"${ORIGINAL_PSL_C}\" \"\${PSL_C_CONTENT}\")
+message(STATUS \"Patched curl/lib/psl.c in-place for MSVC compatibility\")
+")
+add_custom_command(
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/psl_backup.stamp"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${ORIGINAL_PSL_C}" "${CMAKE_CURRENT_BINARY_DIR}/psl.c.backup"
+    COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_CURRENT_BINARY_DIR}/psl_backup.stamp"
+    DEPENDS "${ORIGINAL_PSL_C}"
+    COMMENT "Backing up original curl/lib/psl.c"
+)
+add_custom_command(
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/patch_done.stamp"
+    COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/patch_psl.cmake"
+    COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_CURRENT_BINARY_DIR}/patch_done.stamp"
+    DEPENDS
+        "${CMAKE_CURRENT_BINARY_DIR}/patch_psl.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/psl_backup.stamp"
+    COMMENT "Applying patch to curl/lib/psl.c"
+    VERBATIM
+)
+add_custom_target(patch_curl_psl ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/patch_done.stamp")
+add_dependencies(libcurl_object patch_curl_psl)
+
 target_link_libraries(SuperBLT libcurl_static)
+
+
 
 #### LuaJIT ####
 
 add_subdirectory(src/luajit EXCLUDE_FROM_ALL)
 target_link_libraries(SuperBLT lua51)
+
+
 
 ###############################################################################
 ## loader binary (this generates a seperate target for both Windows loaders) ##
@@ -188,7 +340,22 @@ target_compile_options(WSOCK32 PRIVATE -DBLT_USE_WSOCK)
 ## build external updater for dll                                            ##
 ###############################################################################
 add_executable(SBLT_DLL_UPDATER updater/updater.cpp updater/compression.cpp updater/Resource.rc)
-target_link_libraries(SBLT_DLL_UPDATER ws2_32.lib)
-target_link_libraries(SBLT_DLL_UPDATER zlibstatic)
-target_link_libraries(SBLT_DLL_UPDATER libcurl_static)
+target_link_libraries(SBLT_DLL_UPDATER crypt32.lib ws2_32.lib version.lib)
+target_link_libraries(SBLT_DLL_UPDATER psl zlib-ng libcurl_static)
 target_include_directories(SBLT_DLL_UPDATER PRIVATE updater)
+
+
+# ###############################################################################
+# ## post-cleanup curl psl.c workaround to prevent dirty submodule             ##
+# ###############################################################################
+add_custom_target(restore_and_clean_curl ALL
+    COMMAND ${CMAKE_COMMAND} -E echo "Restoring original curl/lib/psl.c from backup"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_BINARY_DIR}/psl.c.backup" "${ORIGINAL_PSL_C}"
+    COMMAND ${CMAKE_COMMAND} -E remove "${CMAKE_CURRENT_BINARY_DIR}/psl.c.backup"
+    COMMAND git -C "${CMAKE_CURRENT_SOURCE_DIR}/lib/sys/curl" reset --hard HEAD || ${CMAKE_COMMAND} -E true
+    COMMAND git -C "${CMAKE_CURRENT_SOURCE_DIR}/lib/sys/curl" clean -fdx || ${CMAKE_COMMAND} -E true
+    COMMENT "Restoring and cleaning curl submodule (removes patch)"
+    VERBATIM
+    DEPENDS SuperBLT IPHLPAPI WSOCK32 SBLT_DLL_UPDATER
+)
