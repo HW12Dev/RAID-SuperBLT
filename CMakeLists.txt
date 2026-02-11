@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(SuperBLT)
+project(SuperBLT CXX)
 
 ###############################################################################
 ## misc. definitions ##########################################################
@@ -8,8 +8,14 @@ project(SuperBLT)
 
 enable_language(ASM_MASM)
 
-# Use CXX 20
+# Use C 11, no gnu ext
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_EXTENSIONS OFF)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+# Use C++ 20, no gnu ext
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # find python3
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
